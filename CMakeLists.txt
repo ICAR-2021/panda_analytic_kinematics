@@ -8,8 +8,6 @@ project(PandaKin
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_library(Kinematics SHARED)
-
 find_package(Eigen3)
 message("Eigen3 version: ${Eigen3_VERSION}")
 
