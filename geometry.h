@@ -77,29 +77,36 @@ namespace Geometry
       solVec[0] += sqrt(e);
       solVec[1] -= sqrt(e);
     }
-    else std::cerr << "Line and sphere do not intersect! -> "
+    else std::cerr << "Line and sphere do not intersect! (e = " << e << ") -> "
                    << "Returning nearest point on line!" << std::endl;
 
     return solVec;
   }
 
-  static Vec3d intCircleSphere(CVec3dRef cCenter, CVec3dRef cNormal,
+  static void intCircleSphere(CVec3dRef cCenter, CVec3dRef cNormal,
                                const double& cRadius,
                                CVec3dRef sCenter, const double& sRadius,
-                               CVec3dRef detractor)
+                               Vec3dRef solA, Vec3dRef solB)
   {
-    Vec3d icCenter, icNormal;
-    double icRadius;
-    intSphereSphere(sCenter, sRadius, cCenter, cRadius, icCenter, icNormal, icRadius);
+    Vec3d sc(cCenter - sCenter);
+    if (sc.norm() >= sRadius + cRadius)
+    {
+      solA = sCenter + sc.normalized() * sRadius;
+      solB = solA;
+    }
+    else
+    {
+      Vec3d icCenter, icNormal;
+      double icRadius;
+      intSphereSphere(sCenter, sRadius, cCenter, cRadius, icCenter, icNormal, icRadius);
 
-    Vec3d lOrigin, lDirection;
-    intPlanePlane(icCenter, icNormal, cCenter, cNormal, lOrigin, lDirection);
+      Vec3d lOrigin, lDirection;
+      intPlanePlane(icCenter, icNormal, cCenter, cNormal, lOrigin, lDirection);
 
-    Vec2d solFactors(intLineSphere(lOrigin, lDirection, sCenter, sRadius));
-    Vec3d solA(lOrigin + solFactors[0] * lDirection);
-    Vec3d solB(lOrigin + solFactors[1] * lDirection);
-
-    return ((solA - detractor).norm() > (solB - detractor).norm()) ? solA : solB;
+      Vec2d solFactors(intLineSphere(lOrigin, lDirection, sCenter, sRadius));
+      solA = lOrigin + solFactors[0] * lDirection;
+      solB = lOrigin + solFactors[1] * lDirection;
+    }
   }
 
   static void apply(CVecXdRef transform, VecXdRef vec)
