@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "types.h"
 
 class Kinematics
@@ -9,24 +11,19 @@ class Kinematics
     std::vector<Vec2d>  _joint_limits;
     Mat6Xd              _jacobian;
 
-    std::function<VecXd(CVec6dRef, CVecXdRef, const double&)> _inv_kin;
-
   public:
-    Kinematics* addDisplacement(double x,
-                                double y,
-                                double z,
-                                double a,
-                                double b,
-                                double c);
+    Kinematics* addDisplacement(double x, double y, double z,
+                                double a, double b, double c);
 
     Vec6d getDisplacement(int i);
 
-    Kinematics* addJointInfo(double min, double max);
+    std::vector<Vec6d> getDisplacements();
 
-    void setInvKin(std::function<VecXd(CVec6dRef, CVecXdRef, const double&)> invKin);
+    Kinematics* addJointLimits(double min, double max);
 
-    VecXd xToQ(CVec6dRef pose, const double& wrist = .0);
-    VecXd xToQ(CVec6dRef pose, CVecXdRef qinit, const double& wrist = .0);
+    void checkLimits(VecXdRef q);
+
+    virtual MatXd xToQ(CVec6dRef pose, const double& wrist, CVecXdRef qinit) = 0;
     Vec6d qToX(CVecXdRef q);
 
     Mat6XdRef calcJacobian(CVecXdRef q);

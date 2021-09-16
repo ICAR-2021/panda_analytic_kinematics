@@ -4,21 +4,18 @@
 
 int main(int argc, char** argv)
 {
-  Kinematics panda;
-  PandaKinematics::setup(panda);
+  PandaKinematics panda;
   Vec6d x;
   x.setZero();
 
   for (int i = 0; i < std::min(6, argc - 1); i++)
     x[i] = std::atof(argv[i + 1]);
 
-  if (argc < 8)
-  {
-    double qout[7];
-    panda_inv(x.data(), .0, qout);
-  }
+  MatXd qout(4, 7);
+  Eigen::IOFormat format(-1, 0, " ", "\n", "  ");
 
-  VecXd q(panda.xToQ(x, argc > 7 ? std::atof(argv[7]) : 0));
-  std::cout << q.transpose() << std::endl;
+  // for (int i = 0; i < 10000; i++)
+  panda_inv(x.data(), argc > 7 ? std::atof(argv[7]) : 0, qout.data());
 
+  std::cout << "  Solutions:\n" << qout.format(format) << std::endl;
 }

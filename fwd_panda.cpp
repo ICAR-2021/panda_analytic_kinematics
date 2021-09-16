@@ -4,8 +4,7 @@
 
 int main(int argc, char** argv)
 {
-  Kinematics panda;
-  PandaKinematics::setup(panda);
+  PandaKinematics panda;
   VecXd q;
   q.setZero(7);
 
@@ -13,6 +12,6 @@ int main(int argc, char** argv)
     q[i] = std::atof(argv[i + 1]);
 
   Vec6d x(panda.qToX(q));
-  std::cout << x.transpose() << std::endl;
+  std::cout << "  " << x.transpose() << std::endl;
 
 }

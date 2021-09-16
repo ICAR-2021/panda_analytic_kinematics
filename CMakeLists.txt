@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.4)
 
 project(PandaKin
-  VERSION 0.1
+  VERSION 0.2
   LANGUAGES CXX
 )
 

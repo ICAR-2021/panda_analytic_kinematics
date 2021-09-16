@@ -3,12 +3,8 @@
 #include "kinematics.h"
 #include "geometry.h"
 
-Kinematics* Kinematics::addDisplacement(double x,
-                                        double y,
-                                        double z,
-                                        double a,
-                                        double b,
-                                        double c)
+Kinematics* Kinematics::addDisplacement(double x, double y, double z,
+                                        double a, double b, double c)
 {
   Vec6d disp;
   disp << x, y, z, a, b, c;
@@ -19,31 +15,28 @@ Kinematics* Kinematics::addDisplacement(double x,
 
 Vec6d Kinematics::getDisplacement(int i)
 {
+  if (_disps.empty()) return Vec6d::Zero();
   return _disps[i % _disps.size()];
 }
 
-Kinematics* Kinematics::addJointInfo(double min, double max)
+std::vector<Vec6d> Kinematics::getDisplacements()
+{
+  return _disps;
+}
+
+Kinematics* Kinematics::addJointLimits(double min, double max)
 {
   _joint_limits.push_back(Vec2d(min, max));
 
   return this;
 }
 
-void Kinematics::setInvKin(std::function<VecXd(CVec6dRef, CVecXdRef, const double&)> invKin)
+void Kinematics::checkLimits(VecXdRef q)
 {
-  _inv_kin = invKin;
-}
-
-VecXd Kinematics::xToQ(CVec6dRef pose, const double& wrist)
-{
-  return xToQ(pose, VecXd::Zero(_disps.size() - 1), wrist);
-}
-
-VecXd Kinematics::xToQ(CVec6dRef pose, CVecXdRef qinit, const double& wrist)
-{
-  VecXd q(qinit.size());
-  q = _inv_kin(pose, qinit, wrist);
-  return q;
+  for (int i = 0; i < std::min((int) _joint_limits.size(), (int) q.size()); i++)
+  {
+    q[i] = std::min(_joint_limits[i][1], std::max(_joint_limits[i][0], q[i]));
+  }
 }
 
 Vec6d Kinematics::qToX(CVecXdRef q)

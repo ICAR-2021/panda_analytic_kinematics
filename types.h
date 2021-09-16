@@ -31,6 +31,7 @@ typedef Eigen::Ref<const Mat67d>                  CMat67dRef;
 typedef Eigen::Map<VecXd>                         VecXdMap;
 typedef Eigen::Map<Vec3d>                         Vec3dMap;
 typedef Eigen::Map<Vec6d>                         Vec6dMap;
+typedef Eigen::Map<MatXd>                         MatXdMap;
 typedef Eigen::Map<const VecXd>                   CVecXdMap;
 typedef Eigen::Map<const Vec3d>                   CVec3dMap;
 typedef Eigen::Map<const Vec6d>                   CVec6dMap;

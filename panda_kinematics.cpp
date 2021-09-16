@@ -6,127 +6,152 @@
 #define TRIG_PREC     1e-7
 #define TRIG_RND(val) (round(val / TRIG_PREC) * TRIG_PREC)
 
-void PandaKinematics::setup(Kinematics& kinematics)
+// #define SVE_RADIUS  0
+
+// static void setDebugValue(const int* keys, double* vals,
+//                           int& keyIndex, int& valIndex,
+//                           const int& key, double* data, int length)
+// {
+//   if (keys && keys[keyIndex] == key)
+//   {
+//     memcpy(&vals[valIndex], data, length);
+//     keyIndex++;
+//     valIndex += length;
+//   }
+// }
+
+PandaKinematics::PandaKinematics(Vec6d endEffector)
 {
-  kinematics.addDisplacement( .0   ,  .0  , .14 ,      .0, .0,      .0);
-  kinematics.addDisplacement( .0   ,  .0  , .193, -M_PI_2, .0,      .0);
-  kinematics.addDisplacement( .0   , -.192, .0  ,  M_PI_2, .0,      .0);
-  kinematics.addDisplacement( .0825,  .0  , .124,  M_PI_2, .0,      .0);
-  kinematics.addDisplacement(-.0825,  .124, .0  , -M_PI_2, .0,      .0);
-  kinematics.addDisplacement( .0   ,  .0  , .26 ,  M_PI_2, .0,      .0);
-  kinematics.addDisplacement( .088 ,  .0  , .0  ,  M_PI_2, .0,      .0);
-  // without additional end effector
-  // kinematics.addDisplacement( .0   ,  .0  , .107,      .0, .0, -M_PI_4);
-  // with franka hand
-  kinematics.addDisplacement( .0   ,  .0  , .22 ,      .0, .0, -M_PI_4);
+  addDisplacement( .0   ,  .0  , .14 ,      .0, .0,      .0);
+  addDisplacement( .0   ,  .0  , .193, -M_PI_2, .0,      .0);
+  addDisplacement( .0   , -.192, .0  ,  M_PI_2, .0,      .0);
+  addDisplacement( .0825,  .0  , .124,  M_PI_2, .0,      .0);
+  addDisplacement(-.0825,  .124, .0  , -M_PI_2, .0,      .0);
+  addDisplacement( .0   ,  .0  , .26 ,  M_PI_2, .0,      .0);
+  addDisplacement( .088 ,  .0  , .0  ,  M_PI_2, .0,      .0);
+  Vec6d l7;
+  l7 << .0, .0, .107, .0, .0, -M_PI_4;
+  Geometry::apply(l7, endEffector);
+  addDisplacement(endEffector[0], endEffector[1], endEffector[2],
+                  endEffector[3], endEffector[4], endEffector[5]);
 
-  kinematics.addJointInfo(-170, 170);
-  kinematics.addJointInfo(-105, 105);
-  kinematics.addJointInfo(-170, 170);
-  kinematics.addJointInfo(-180, 5);
-  kinematics.addJointInfo(-170, 170);
-  kinematics.addJointInfo(-5, 219);
-  kinematics.addJointInfo(-170, 170);
+  addJointLimits(-2.8973,  2.8973);
+  addJointLimits(-1.7628,  1.7628);
+  addJointLimits(-2.8973,  2.8973);
+  addJointLimits(-3.0718, -0.0698);
+  addJointLimits(-2.8973,  2.8973);
+  addJointLimits(-0.0175,  3.7525);
+  addJointLimits(-2.8973,  2.8973);
+}
 
-  kinematics.setInvKin([&](CVec6dRef pose, CVecXdRef qinit, const double& wrAngle) -> VecXd {
-    //////////////////////////// should be done only once //////////////////////////
-    // shoulder position
-    const Vec3d shoulder(kinematics.qToX(VecXd::Zero(2)).head(3));
+MatXd PandaKinematics::xToQ(CVec6dRef pose, const double& wrAngle, CVecXdRef qinit)
+{
+  //////////////////////////// should be done only once //////////////////////////
+  // shoulder position
+  const Vec3d shoulder(qToX(VecXd::Zero(2)).head(3));
 
-    // define wrist circle radius: distance between wrist and z67
-    const double wcRadius(kinematics.getDisplacement(-2)[0]);
+  // define wrist circle radius: distance between wrist and z67
+  const double wcRadius(getDisplacement(-2)[0]);
 
-    // relative zero positions from j12 to j34 (upperarm) and from j34 to j56 (forearm)
-    Vec3d upperarm(kinematics.getDisplacement(3).head(3));
-    Geometry::apply(kinematics.getDisplacement(2), upperarm);
-    Vec3d forearm(kinematics.getDisplacement(5).head(3));
-    Geometry::apply(kinematics.getDisplacement(4), forearm);
-    const double lenUa(upperarm.norm());
-    const double lenFa(forearm.norm());
-    const double ratio(lenUa / (lenUa + lenFa));
+  // relative zero positions from j12 to j34 (upperarm) and from j34 to j56 (forearm)
+  Vec3d upperarm(getDisplacement(3).head(3));
+  Geometry::apply(getDisplacement(2), upperarm);
+  Vec3d forearm(getDisplacement(5).head(3));
+  Geometry::apply(getDisplacement(4), forearm);
+  const double lenUa(upperarm.norm());
+  const double lenFa(forearm.norm());
+  const double ratio(lenUa / (lenUa + lenFa));
 
-    // offsets between elbow and joint axes z23 and z45
-    const double elbowOffset(kinematics.getDisplacement(3)[0]);
-    // angle offset between upper arm and virtual upper arm
-    const double uaOffset(asin(elbowOffset / lenUa));
-    // angle offset between forearm and virtual forearm
-    const double faOffset(asin(elbowOffset / lenFa));
-    ////////////////////////////////////////////////////////////////////////////////
+  // offsets between elbow and joint axes z23 and z45
+  const double elbowOffset(getDisplacement(3)[0]);
+  // angle offset between upper arm and virtual upper arm
+  const double uaOffset(asin(elbowOffset / lenUa));
+  // angle offset between forearm and virtual forearm
+  const double faOffset(asin(elbowOffset / lenFa));
+  ////////////////////////////////////////////////////////////////////////////////
 
-    VecXd q;
-    q.setZero(qinit.size());
-    Vec3d ee(pose.head(3));
+  int debugKeyIndex(0), debugValIndex(0);
 
-    // determine end effector's normal, open, and approach vector
-    Vec3d eex(Vec3d::UnitX()), eey(Vec3d::UnitY()), eez(Vec3d::UnitZ());
-    Geometry::apply(pose.tail(3), eex);
-    Geometry::apply(pose.tail(3), eey);
-    Geometry::apply(pose.tail(3), eez);
+  MatXd qSol;
+  qSol.setZero(4, 7);
+  Vec3d ee(pose.head(3));
 
-    // define wrist circle (wc): all possible wrist positions
-    Vec3d wcCenter(ee - eez * kinematics.getDisplacement(-1)[2]);
+  // determine end effector's normal, open, and approach vector
+  Vec3d eex(Vec3d::UnitX()), eey(Vec3d::UnitY()), eez(Vec3d::UnitZ());
+  Geometry::apply(pose.tail(3), eex);
+  Geometry::apply(pose.tail(3), eey);
+  Geometry::apply(pose.tail(3), eez);
 
-    // use projection of (shoulder to wc center) on eez to find x67
-    Vec3d x67(wcCenter - (shoulder + eez * eez.dot(wcCenter - shoulder)));
-    Geometry::apply(wrAngle * -eez, x67);
-    x67.normalize();
+  // define wrist circle (wc): all possible wrist positions
+  Vec3d wcCenter(ee - eez * getDisplacement(-1)[2]);
 
-    // find wrist by moving by wc radius along negative x67 from wc center
-    Vec3d wrist(wcRadius * -x67);
-    wrist += wcCenter;
+  // use projection of (shoulder to wc center) on eez to find x67
+  Vec3d x67(wcCenter - (shoulder + eez * eez.dot(wcCenter - shoulder)));
+  Geometry::apply(wrAngle * -eez, x67);
+  x67.normalize();
 
-    // find q67 from eex and x67 using a temporary vector (tmpVec)
-    Vec3d tmpVec(eex);
-    Vec3d l7inv(-kinematics.getDisplacement(-1).tail(3));
-    Geometry::apply(pose.tail(3), l7inv);
-    Geometry::apply(l7inv, tmpVec);
-    q[6] = acos(TRIG_RND(x67.dot(tmpVec)));
-    // find correct sign
-    Geometry::apply(-q[6] * eez, tmpVec);
-    if (tmpVec.dot(x67) < 1 - TRIG_PREC) q[6] *= -1;
+  // find wrist by moving by wc radius along negative x67 from wc center
+  Vec3d wrist(wcRadius * -x67);
+  wrist += wcCenter;
 
-    // check workspace exceedance
-    Vec3d wrSh = shoulder - wrist;
-    double gap = wrSh.norm() - (lenUa + lenFa);
-    if (gap > 0)
-    {
-      // move everything towards shoulder
-      wrSh.normalize();
-      wrSh *= gap + TRIG_PREC;
-      std::cout << "Gap before: " << gap << std::endl;
+  // find q67 from eex and x67 using a temporary vector (tmpVec)
+  Vec3d tmpVec(eex);
+  Vec3d l7inv(-getDisplacement(-1).tail(3));
+  Geometry::apply(pose.tail(3), l7inv);
+  Geometry::apply(l7inv, tmpVec);
+  qSol(0,6) = acos(TRIG_RND(x67.dot(tmpVec)));
+  // find correct sign
+  Geometry::apply(-qSol(0,6) * eez, tmpVec);
+  if (tmpVec.dot(x67) < 1 - TRIG_PREC) qSol(0,6) *= -1;
+  for (int i : {1, 2, 3}) qSol(i,6) = qSol(0,6);
 
-      wcCenter += wrSh;
-      wrist += wrSh;
-      ee += wrSh;
-      wrSh = shoulder - wrist;
-      std::cout << "Gap after: " << (wrSh.norm() - (lenUa + lenFa)) << std::endl;
-    }
+  // check workspace exceedance
+  Vec3d wrSh = shoulder - wrist;
+  double gap = wrSh.norm() - (lenUa + lenFa);
+  if (gap > 0)
+  {
+    // move everything towards shoulder
+    wrSh.normalize();
+    wrSh *= gap + TRIG_PREC;
 
-    // find angle spanned by forearm and upper arm
-    double cosShElWr((pow(lenUa, 2) + pow(lenFa, 2) - pow(wrSh.norm(), 2))
-                      / (2 * lenUa * lenFa));
-    double shElWr(acos(cosShElWr));
-    q[3] = -M_PI + shElWr + faOffset + uaOffset;
+    wcCenter += wrSh;
+    wrist += wrSh;
+    ee += wrSh;
+    wrSh = shoulder - wrist;
+  }
 
-    // check plausibility
-    double tmpVal((kinematics.qToX(q.head(5)).head(3) - shoulder).norm() - wrSh.norm());
-    if (abs(tmpVal) > TRIG_PREC) q[3] = -M_PI + shElWr - faOffset - uaOffset;
+  // find angle spanned by forearm and upper arm
+  double cosShElWr((pow(lenUa, 2) + pow(lenFa, 2) - pow(wrSh.norm(), 2))
+                    / (2 * lenUa * lenFa));
+  double shElWr(acos(cosShElWr));
+  qSol(0,3) = -M_PI + shElWr + faOffset + uaOffset;
 
-    // virtual elbow (ve): intersetion of z23 and z45
-    double veExtension(0);
-    double q3half((M_PI - abs(q[3])) / 2);
-    if (sin(q3half) > TRIG_PREC) veExtension = elbowOffset * cos(q3half) / sin(q3half);
+  // check plausibility by comparison with forward kinematics
+  tmpVec = qToX(qSol.row(0).head(5)).head(3) - shoulder;
+  if (abs(tmpVec.norm() - wrSh.norm()) > TRIG_PREC)
+    qSol(0,3) = -M_PI + shElWr - faOffset - uaOffset;
+  for (int i : {1, 2, 3}) qSol(i,3) = qSol(0,3);
 
-    // distance from ve to wrist
-    double vewDist(forearm[1] + veExtension);
+  // virtual elbow (ve): intersetion of z23 and z45
+  double veExtension(0);
+  double q3half((M_PI - abs(qSol(0,3))) / 2);
+  if (sin(q3half) > TRIG_PREC) veExtension = elbowOffset * cos(q3half) / sin(q3half);
 
-    // distance from ve to shoulder
-    double vesDist(-upperarm[1] + veExtension);
+  // distance from ve to wrist
+  double vewDist(forearm[1] + veExtension);
 
-    Vec3d ve, veAlt, z56(eez.cross(x67));
-    Geometry::intCircleSphere(wrist, z56, vewDist, shoulder, vesDist, ve, veAlt);
-    if ((ve - ee).norm() < (veAlt - ee).norm()) ve = veAlt;
+  // distance from ve to shoulder
+  double vesDist(-upperarm[1] + veExtension);
+  // setDebugValue(debugKeys, debugVals,
+  //               debugKeyIndex, debugValIndex,
+  //               SVE_RADIUS, &vesDist, 1);
 
+  Vec3d veA, veB, z56(eez.cross(x67));
+  Geometry::intCircleSphere(wrist, z56, vewDist, shoulder, vesDist, veA, veB);
+
+  int sol = 0;
+  for (Vec3d ve : {veA, veB})
+  {
     // find z34 from virtual forearm (vf) and virtual upper arm (vu)
     Vec3d vf(wrist - ve), z45(vf.normalized());
     Vec3d vu(ve - shoulder), z23(vu.normalized());
@@ -136,80 +161,75 @@ void PandaKinematics::setup(Kinematics& kinematics)
 
     // find elbow from ve, z45, and z34
     Vec3d elbow(ve + veExtension * z45 + elbowOffset * z45.cross(z34));
-    // std::cout << "Elbow: " << elbow.transpose() << std::endl;
 
     // calc q56 from z45 and eez
-    q[5] = z45.dot(x67) < 0 ? M_PI + acos(eez.dot(z45)) : acos(eez.dot(-z45));
+    qSol(sol,5) = z45.dot(x67) < 0 ? M_PI + acos(eez.dot(z45)) : acos(eez.dot(-z45));
+    qSol(sol+1,5) = qSol(sol,5);
 
     // calc q45 from z34 and z56
-    q[4] = acos(TRIG_RND(z34.dot(z56)));
+    qSol(0,4) = acos(TRIG_RND(z34.dot(z56)));
     // find correct sign
     tmpVec = z34;
-    Geometry::apply(q[4] * z45, tmpVec);
-    if (tmpVec.dot(z56) < 1 - TRIG_PREC) q[4] *= -1;
+    Geometry::apply(qSol(0,4) * z45, tmpVec);
+    if (tmpVec.dot(z56) < 1 - TRIG_PREC) qSol(0,4) *= -1;
+    qSol(sol+1,4) = qSol(sol,4);
 
     // calc q12 from ve position
-    q[1] = acos(TRIG_RND((ve[2] - shoulder[2]) / vesDist));
-    if (q[1] < TRIG_PREC)
+    qSol(sol,1) = acos(TRIG_RND((ve[2] - shoulder[2]) / vesDist));
+    qSol(sol+1,1) = qSol(sol,1);
+    if (qSol(sol,1) < TRIG_PREC)
     {
-      q[0] = acos((elbow - ve).head(2).normalized().dot(Vec2d::UnitX())) / 2;
-      q[0] = std::copysign(q[0], Vec2d::UnitY().dot((elbow - ve).head(2)));
-      q[2] = q[0];
+      double theta = acos((elbow - ve).head(2).normalized().dot(Vec2d::UnitX()));
+      theta = std::copysign(theta, Vec2d::UnitY().dot((elbow - ve).head(2)));
+
+      qSol(sol,0) = qinit[0];
+      qSol(sol+1,0) = qSol(sol,0);
+
+      qSol(sol,2) = theta - qSol(sol,0);
+      qSol(sol+1,2) = qSol(sol,2);
     }
     else
     {
-      double q23, sum, minSum(4 * M_PI);
-      double theta(atan2(ve[1], ve[0]));
+      double theta = atan2(ve[1], ve[0]);
       Vec3d z12;
-      for (double q01 : {theta, theta - std::copysign(M_PI, theta)})
+      for (int i : {0, 1})
       {
+        // calc q01
+        qSol(sol,0) = theta - i * std::copysign(M_PI, theta);
+
         // calc z12 from q01
         z12 = Vec3d::UnitY();
-        Geometry::apply(q01 * Vec3d::UnitZ(), z12);
+        Geometry::apply(qSol(sol,0) * Vec3d::UnitZ(), z12);
 
         // calc q23 from z12
-        q23 = acos(TRIG_RND(z12.dot(-z34)));
+        qSol(sol,2) = acos(TRIG_RND(z12.dot(-z34)));
         tmpVec = z12;
-        Geometry::apply(q23 * z23, tmpVec);
+        Geometry::apply(qSol(sol,2) * z23, tmpVec);
         // find correct sign
-        if (tmpVec.dot(-z34) < 1 - TRIG_PREC) q23 *= -1;
+        if (tmpVec.dot(-z34) < 1 - TRIG_PREC) qSol(sol,2) *= -1;
 
-        sum = abs(q01 - qinit[0]) + abs(q[1] - qinit[1]) + abs(q23 - qinit[2]);
-        if (minSum > sum)
-        {
-          q[0] = q01;
-          q[2] = q23;
+        // find correct sign of q12 by applying to Z and compare with z23
+        tmpVec = Vec3d::UnitZ();
+        Geometry::apply(qSol(sol,1) * z12, tmpVec);
+        if (tmpVec.dot(z23) < 1 - TRIG_PREC) qSol(sol,1) *= -1;
 
-          // find correct sign of q12 by applying to Z and compare with z23
-          tmpVec = Vec3d::UnitZ();
-          Geometry::apply(q[1] * z12, tmpVec);
-          if (abs(tmpVec.dot(z23)) < 1 - TRIG_PREC) q[1] *= -1;
-
-          minSum = sum;
-        }
+        sol++;
       }
     }
-
-    return q;
-  });
-}
-
-void panda_inv(const double* pose, const double wrist, double* joints)
-{
-  Kinematics panda;
-  PandaKinematics::setup(panda);
-  CVec6dMap x(pose);
-  VecXdMap qOut(joints, 7);
-  VecXd qIn(qOut);
-
-  qOut = panda.xToQ(x, qIn, wrist);
-}
-
-void panda_sum(double* joints, double wrist, double* result)
-{
-  for (int i = 0; i < 3; i++)
-  {
-    std::cout << "Joint value " << i << ": " << joints[i] << std::endl;
-    result[i] = joints[i] * wrist;
   }
+
+  return qSol;
+}
+
+void panda_inv(double* pose, double wrist, double* qOut)
+{
+  static PandaKinematics panda;
+  // Franka Hand:
+  // panda.addDisplacement( .0   ,  .0  , .22 ,      .0, .0, -M_PI_4);
+  // std::cout << "[ ";
+  // for (int i : {0, 1, 2, 3, 4, 5, 6}) std::cout << qOut[i] << " ";
+  // std::cout << "]" << std::endl;
+  CVec6dMap x(pose);
+  MatXdMap qOutMap(qOut, 4, 7);
+  qOutMap = panda.xToQ(x, wrist, qOutMap.row(0));
 }

@@ -77,8 +77,11 @@ namespace Geometry
       solVec[0] += sqrt(e);
       solVec[1] -= sqrt(e);
     }
-    else std::cerr << "Line and sphere do not intersect! (e = " << e << ") -> "
-                   << "Returning nearest point on line!" << std::endl;
+    // else std::cerr << "Line and sphere do not intersect! (e = " << e << ") -> "
+    //                << "Returning nearest point on line!"
+    //                << "\nLine:\n" << lOrigin << "\n" << lDirection
+    //                << "\nSphere:\n" << sCenter << "\n" << sRadius
+    //                << std::endl;
 
     return solVec;
   }
@@ -92,6 +95,11 @@ namespace Geometry
     if (sc.norm() >= sRadius + cRadius)
     {
       solA = sCenter + sc.normalized() * sRadius;
+      solB = solA;
+    }
+    else if (sc.norm() <= cRadius - sRadius)
+    {
+      solA = sCenter - sc.normalized() * sRadius;
       solB = solA;
     }
     else

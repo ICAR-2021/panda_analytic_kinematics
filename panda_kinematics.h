@@ -3,14 +3,15 @@
 
 #include "kinematics.h"
 
-namespace PandaKinematics
+class PandaKinematics : public Kinematics
 {
-  void setup(Kinematics& kinematics);
-}
+  public:
+    PandaKinematics(Vec6d endEffector = Vec6d::Zero());
+    MatXd xToQ(CVec6dRef pose, const double& wrAngle = .0,
+               CVecXdRef qinit = VecXd::Zero(7));
+};
 
 extern "C"
 {
-  void panda_inv(const double* pose, const double wrist, double* joints);
-
-  void panda_sum(double* i, double j, double* result);
+  void panda_inv(double* pose, double wrist, double* qOut);
 }
