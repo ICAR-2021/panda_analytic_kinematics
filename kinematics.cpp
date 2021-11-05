@@ -3,8 +3,8 @@
 #include "kinematics.h"
 #include "geometry.h"
 
-Kinematics* Kinematics::addDisplacement(double x, double y, double z,
-                                        double a, double b, double c)
+Kinematics* Kinematics::addDisplacement(
+    double x, double y, double z, double a, double b, double c)
 {
   Vec6d disp;
   disp << x, y, z, a, b, c;
@@ -45,7 +45,8 @@ Vec6d Kinematics::qToX(CVecXdRef q)
     throw Exception("Too many joint values for number of displacements.");
 
   Vec6d qvec;
-  Vec6d x(Vec6d::Zero());
+  Vec6d x(_disps[q.size()]);
+  // Vec6d x(Vec6d::Zero());
   for (int i = q.size() - 1; i >= 0; i--)
   {
     qvec << 0, 0, 0, 0, 0, q[i];
@@ -56,7 +57,7 @@ Vec6d Kinematics::qToX(CVecXdRef q)
   return x;
 }
 
-Mat6XdRef Kinematics::calcJacobian(CVecXdRef q)
+Mat6Xd Kinematics::calcJacobian(CVecXdRef q)
 {
   if (q.size() >= _disps.size())
     throw Exception("Too many joint values for number of displacements.");

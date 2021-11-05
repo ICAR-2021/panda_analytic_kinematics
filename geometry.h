@@ -43,11 +43,11 @@ namespace Geometry
     Vec2d distances(p0Origin.dot(p0Normal),
                     p1Origin.dot(p1Normal));
 
-    MatXd normals(2, 3);
+    Eigen::Matrix<double, 2, 3> normals;
     normals << p0Normal[0], p0Normal[1], p0Normal[2],
                p1Normal[0], p1Normal[1], p1Normal[2];
 
-    MatXd transp(3, 2);
+    Eigen::Matrix<double, 3, 2> transp;
     transp << p0Normal[0], p1Normal[0],
               p0Normal[1], p1Normal[1],
               p0Normal[2], p1Normal[2];

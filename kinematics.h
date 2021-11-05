@@ -23,10 +23,11 @@ class Kinematics
 
     void checkLimits(VecXdRef q);
 
-    virtual MatXd xToQ(CVec6dRef pose, const double& wrist, CVecXdRef qinit) = 0;
+    virtual VecXd xToQ(CVec6dRef pose, const double& wrist, CVecXdRef qinit) = 0;
+
     Vec6d qToX(CVecXdRef q);
 
-    Mat6XdRef calcJacobian(CVecXdRef q);
+    Mat6Xd calcJacobian(CVecXdRef q);
 
     class Exception
     {

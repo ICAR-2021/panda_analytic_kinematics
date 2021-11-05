@@ -6,9 +6,9 @@ int main(int argc, char** argv)
 {
   PandaKinematics panda;
   VecXd q;
-  q.setZero(7);
+  q.setZero(argc - 1);
 
-  for (int i = 0; i < std::min(7, argc - 1); i++)
+  for (int i = 0; i < q.size(); i++)
     q[i] = std::atof(argv[i + 1]);
 
   Vec6d x(panda.qToX(q));

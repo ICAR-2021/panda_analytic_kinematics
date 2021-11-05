@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.4)
 
 project(PandaKin
-  VERSION 0.2
+  VERSION 0.3
   LANGUAGES CXX
 )
 
@@ -23,8 +23,13 @@ set(PK_SOURCES kinematics.cpp panda_kinematics.cpp)
 add_library(PandaKin SHARED ${PK_SOURCES})
 target_link_libraries(PandaKin ${PK_LIBS})
 
+## inverse kinematics with use of sources
+# add_executable(inv_panda inv_panda.cpp kinematics.cpp panda_kinematics.cpp)
+# target_link_libraries(inv_panda ${PK_LIBS})
+
+## inverse kinematics with use of lib
 add_executable(inv_panda inv_panda.cpp)
 target_link_libraries(inv_panda PandaKin ${PK_LIBS})
 
-add_executable(fwd_panda ${PK_SOURCES} fwd_panda.cpp)
-target_link_libraries(fwd_panda ${PK_LIBS})
+add_executable(fwd_panda fwd_panda.cpp)
+target_link_libraries(fwd_panda PandaKin ${PK_LIBS})
