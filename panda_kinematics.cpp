@@ -43,6 +43,21 @@ PandaKinematics::PandaKinematics(Vec6d endEffector)
 VecXd PandaKinematics::xToQ(CVec6dRef pose, const double& wrAngle, CVecXdRef qinit)
 {
   MatRCd<4, 7> allQ = xToAllQ(pose, wrAngle, qinit);
+  for (int r = 0; r < allQ.rows(); r++)
+  {
+    for (int c = 0; c < allQ.cols(); c++)
+    {
+      while (allQ(r, c) > std::max(_joint_limits[c][1], _joint_limits[c][2] + M_PI))
+      {
+        allQ(r, c) -= 2 * M_PI;
+      }
+      while (allQ(r, c) < std::min(_joint_limits[c][0], _joint_limits[c][2] - M_PI))
+      {
+        allQ(r, c) += 2 * M_PI;
+      }
+    }
+  }
+
   VecRd<4> diff = (allQ.transpose().colwise() - qinit).colwise().norm();
   int minSol = 0;
   for (int i = 1; i < allQ.rows(); i++)
@@ -71,12 +86,12 @@ MatRCd<4, 7> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
   // define wrist circle (wc): all possible wrist positions
   wc_center << ee_pos - ee_z * getDisplacement(-1)[2];
 
-  // use projection of (shoulder to wc center) on ee_z to find x_67
+  // use projection of (shoulder to wc_center) on ee_z to find x_67
   x_67 << wc_center - (shoulder_pos + ee_z * ee_z.dot(wc_center - shoulder_pos));
   Geometry::apply(wrAngle * -ee_z, x_67);
   x_67.normalize();
 
-  // find wrist by moving by wc radius along negative x_67 from wc center
+  // find wrist by moving by wc_radius along negative x_67 from wc_center
   wrist_pos << wc_radius * -x_67;
   wrist_pos += wc_center;
 

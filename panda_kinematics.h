@@ -8,7 +8,7 @@ class PandaKinematics : public Kinematics
 {
   public:
     PandaKinematics(Vec6d endEffector = Vec6d::Zero());
-    VecXd xToQ(CVec6dRef pose, const double& wrAngle, CVecXdRef qinit);
+    VecXd xToQ(CVec6dRef pose, const double& wrAngle = 0, CVecXdRef qinit = Vec7d::Zero());
     MatRCd<4, 7> xToAllQ(CVec6dRef pose, const double& wrAngle = .0,
                          CVecRdRef<7> qinit = Vec7d::Zero());
   private:

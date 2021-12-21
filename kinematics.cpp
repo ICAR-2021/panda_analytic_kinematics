@@ -26,7 +26,8 @@ std::vector<Vec6d> Kinematics::getDisplacements()
 
 Kinematics* Kinematics::addJointLimits(double min, double max)
 {
-  _joint_limits.push_back(Vec2d(min, max));
+  double mean((min + max) / 2);
+  _joint_limits.push_back(Vec3d(min, max, mean));
 
   return this;
 }

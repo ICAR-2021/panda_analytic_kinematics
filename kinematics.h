@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 #include "types.h"
 
@@ -8,8 +9,10 @@ class Kinematics
 {
   private:
     std::vector<Vec6d>  _disps;
-    std::vector<Vec2d>  _joint_limits;
     Mat6Xd              _jacobian;
+
+  protected:
+    std::vector<Vec3d>  _joint_limits;
 
   public:
     Kinematics* addDisplacement(double x, double y, double z,
@@ -40,3 +43,5 @@ class Kinematics
         std::string what();
     };
 };
+
+typedef std::shared_ptr<Kinematics> KinematicsPtr;
