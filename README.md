@@ -54,3 +54,6 @@ The poses are given by six parameters.
 The first three parameters define the x, y, and z coordinate.
 The last three describe the rotation in an axis angle representation where the norm represents the rotation angle in radians.
 
+## Theory
+
+[S. Tittel, "Analytical Solution for the Inverse Kinematics Problem of the Franka Emika Panda Seven-DOF Light-Weight Robot Arm," 2021 20th International Conference on Advanced Robotics (ICAR), 2021, pp. 1042-1047, doi: 10.1109/ICAR53236.2021.9659393.](https://ieeexplore.ieee.org/abstract/document/9659393)
