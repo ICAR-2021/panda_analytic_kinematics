@@ -26,7 +26,7 @@ int main(int argc, char** argv)
     poses.push_back(pose);
   }
 
-  MatXd qout(4, 7);
+  std::vector<VecXd> qout;
   Eigen::IOFormat format(-1, 0, " ", "\n", "  ");
 
   std::chrono::high_resolution_clock::time_point start;
@@ -41,5 +41,8 @@ int main(int argc, char** argv)
   if (poses.size() > 1)
     std::cout << "  Time: " << duration.count() << "sec" << std::endl;
   else
-    std::cout << "  Solutions:\n" << qout.format(format) << std::endl;
+  {
+    std::cout << "  Solutions:" << std::endl;
+    for (VecXd q : qout) std::cout << q.format(format) << std::endl;
+  }
 }

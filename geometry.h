@@ -74,8 +74,8 @@ namespace Geometry
     Vec2d solVec(d, d);
     if (e >= 0)
     {
-      solVec[0] += sqrt(e);
-      solVec[1] -= sqrt(e);
+      solVec[0] -= sqrt(e);
+      solVec[1] += sqrt(e);
     }
     // else std::cerr << "Line and sphere do not intersect! (e = " << e << ") -> "
     //                << "Returning nearest point on line!"

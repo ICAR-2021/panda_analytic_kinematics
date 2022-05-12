@@ -8,10 +8,25 @@ class PandaKinematics : public Kinematics
 {
   public:
     PandaKinematics(Vec6d endEffector = Vec6d::Zero());
+
     VecXd xToQ(CVec6dRef pose, const double& wrAngle = 0, CVecXdRef qinit = Vec7d::Zero());
-    MatRCd<4, 7> xToAllQ(CVec6dRef pose, const double& wrAngle = .0,
-                         CVecRdRef<7> qinit = Vec7d::Zero());
+    std::vector<VecXd> xToAllQ(CVec6dRef pose, const double& wrAngle = .0,
+                               CVecRdRef<7> qinit = Vec7d::Zero());
+
+    double getWristAngle(CVecXdRef q, Vec6dRef pose);
+
+    int getStatus();
+
+    static const int STATUS_OK;
+    static const int STATUS_TOO_FAR;
+
   private:
+    // retrieve ee axes and some other stuff needed for the wrist calculations
+    void eeAxesFromPose(CVecXdRef pose);
+
+    // status code for incidents while calculation
+    int status;
+
     // shoulder position
     const Vec3d shoulder_pos;
 
@@ -55,5 +70,7 @@ class PandaKinematics : public Kinematics
 
 extern "C"
 {
-  void panda_inv(double* pose, double wrist, double* qOut);
+  int panda_ik(double* pose, double wrist, double* qOut, int sol = -1);
+
+  int panda_fk(double* q, double* pose, int dof = 7);
 }

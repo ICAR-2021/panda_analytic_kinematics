@@ -40,6 +40,15 @@ void Kinematics::checkLimits(VecXdRef q)
   }
 }
 
+void Kinematics::checkMean(VecXdRef q)
+{
+  for (int i = 0; i < std::min((int) _joint_limits.size(), (int) q.size()); i++)
+  {
+    while (q[i] > _joint_limits[i][2] + M_PI) q[i] -= 2 * M_PI;
+    while (q[i] < _joint_limits[i][2] - M_PI) q[i] += 2 * M_PI;
+  }
+}
+
 Vec6d Kinematics::qToX(CVecXdRef q)
 {
   if (q.size() >= _disps.size())

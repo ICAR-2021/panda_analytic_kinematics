@@ -26,6 +26,8 @@ class Kinematics
 
     void checkLimits(VecXdRef q);
 
+    void checkMean(VecXdRef q);
+
     virtual VecXd xToQ(CVec6dRef pose, const double& wrist, CVecXdRef qinit) = 0;
 
     Vec6d qToX(CVecXdRef q);

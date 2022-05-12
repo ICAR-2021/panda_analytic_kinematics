@@ -3,8 +3,11 @@
 #include "geometry.h"
 #include <iostream>
 
-#define TRIG_PREC     1e-7
+#define TRIG_PREC     1e-3
 #define TRIG_RND(val) (round(val / TRIG_PREC) * TRIG_PREC)
+
+const int PandaKinematics::STATUS_OK = 0;
+const int PandaKinematics::STATUS_TOO_FAR = 1;
 
 PandaKinematics::PandaKinematics(Vec6d endEffector)
 : shoulder_pos(.0, .0, .333),
@@ -42,52 +45,36 @@ PandaKinematics::PandaKinematics(Vec6d endEffector)
 
 VecXd PandaKinematics::xToQ(CVec6dRef pose, const double& wrAngle, CVecXdRef qinit)
 {
-  MatRCd<4, 7> allQ = xToAllQ(pose, wrAngle, qinit);
-  for (int r = 0; r < allQ.rows(); r++)
+  std::vector<VecXd> allQ = xToAllQ(pose, wrAngle, qinit);
+
+  double diff, minSol = (allQ[0] - qinit).norm();
+  int minSolIndex = 0;
+  for (int i = 1; i < allQ.size(); i++)
   {
-    for (int c = 0; c < allQ.cols(); c++)
+    diff = (allQ[i] - qinit).norm();
+    if (diff < minSol)
     {
-      while (allQ(r, c) > std::max(_joint_limits[c][1], _joint_limits[c][2] + M_PI))
-      {
-        allQ(r, c) -= 2 * M_PI;
-      }
-      while (allQ(r, c) < std::min(_joint_limits[c][0], _joint_limits[c][2] - M_PI))
-      {
-        allQ(r, c) += 2 * M_PI;
-      }
+      minSol = diff;
+      minSolIndex = i;
     }
   }
 
-  VecRd<4> diff = (allQ.transpose().colwise() - qinit).colwise().norm();
-  int minSol = 0;
-  for (int i = 1; i < allQ.rows(); i++)
-  {
-    if (diff[i] < diff[minSol]) minSol = i;
-  }
-
-  return allQ.row(minSol);
+  return allQ[minSolIndex];
 }
 
-MatRCd<4, 7> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
-                                      CVecRdRef<7> qinit)
+std::vector<VecXd> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
+                                            CVecRdRef<7> qinit)
 {
-  MatRCd<4, 7> qSol;
-  qSol.setZero();
+  status = STATUS_OK;
+
+  std::vector<VecXd> qSol;
+  for (int i = 0; i < 4; i++) qSol.push_back(Vec7d::Zero());
+
   ee_pos << pose.head(3);
 
-  // determine end effector's normal, open, and approach vector
-  ee_x << Vec3d::UnitX();
-  ee_y << Vec3d::UnitY();
-  ee_z << Vec3d::UnitZ();
-  Geometry::apply(pose.tail(3), ee_x);
-  Geometry::apply(pose.tail(3), ee_y);
-  Geometry::apply(pose.tail(3), ee_z);
+  eeAxesFromPose(pose);
 
-  // define wrist circle (wc): all possible wrist positions
-  wc_center << ee_pos - ee_z * getDisplacement(-1)[2];
-
-  // use projection of (shoulder to wc_center) on ee_z to find x_67
-  x_67 << wc_center - (shoulder_pos + ee_z * ee_z.dot(wc_center - shoulder_pos));
+  // apply wrist (redundancy) angle
   Geometry::apply(wrAngle * -ee_z, x_67);
   x_67.normalize();
 
@@ -100,17 +87,19 @@ MatRCd<4, 7> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
   ee_inv = -getDisplacement(-1).tail(3);
   Geometry::apply(pose.tail(3), ee_inv);
   Geometry::apply(ee_inv, tmp_vec);
-  qSol(0,6) = acos(TRIG_RND(x_67.dot(tmp_vec)));
+  qSol[0][6] = acos(TRIG_RND(x_67.dot(tmp_vec)));
   // find correct sign
-  Geometry::apply(-qSol(0,6) * ee_z, tmp_vec);
-  if (tmp_vec.dot(x_67) < 1 - TRIG_PREC) qSol(0,6) *= -1;
-  for (int i : {1, 2, 3}) qSol(i,6) = qSol(0,6);
+  Geometry::apply(-qSol[0][6] * ee_z, tmp_vec);
+  if (tmp_vec.dot(x_67) < 1 - TRIG_PREC) qSol[0][6] *= -1;
+  for (int i : {1, 2, 3}) qSol[i][6] = qSol[0][6];
 
   // check workspace exceedance
   wr_sh << shoulder_pos - wrist_pos;
   double elbow_gap = wr_sh.norm() - (len_ua + len_fa);
   if (elbow_gap > 0)
   {
+    status += STATUS_TOO_FAR;
+
     // move everything towards shoulder
     wr_sh.normalize();
     wr_sh *= elbow_gap + TRIG_PREC;
@@ -125,17 +114,17 @@ MatRCd<4, 7> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
   double cos_sh_el_wr((pow(len_ua, 2) + pow(len_fa, 2) - pow(wr_sh.norm(), 2))
                     / (2 * len_ua * len_fa));
   double sh_el_wr(acos(cos_sh_el_wr));
-  qSol(0,3) = -M_PI + sh_el_wr - fa_offset - ua_offset;
+  qSol[0][3] = -M_PI + sh_el_wr - fa_offset - ua_offset;
 
   // check plausibility by comparison with forward kinematics
-  tmp_vec << qToX(qSol.row(0).head(5)).head(3) - shoulder_pos;
+  tmp_vec << qToX(qSol[0].head(5)).head(3) - shoulder_pos;
   if (abs(tmp_vec.norm() - wr_sh.norm()) > TRIG_PREC)
-    qSol(0,3) = -M_PI + sh_el_wr + fa_offset + ua_offset;
-  for (int i : {1, 2, 3}) qSol(i,3) = qSol(0,3);
+    qSol[0][3] = -M_PI + sh_el_wr + fa_offset + ua_offset;
+  for (int i : {1, 2, 3}) qSol[i][3] = qSol[0][3];
 
   // virtual elbow (ve): intersetion of z23 and z45
   double ve_extension(0);
-  double q3_2((M_PI - abs(qSol(0,3))) / 2);
+  double q3_2((M_PI - abs(qSol[0][3])) / 2);
   if (sin(q3_2) > TRIG_PREC) ve_extension = elbow_offset * cos(q3_2) / sin(q3_2);
 
   // distance from ve to wrist
@@ -150,7 +139,10 @@ MatRCd<4, 7> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
   z_56 << ee_z.cross(x_67);
   Geometry::intCircleSphere(wrist_pos, z_56, vew_dist, shoulder_pos, ves_dist, ve_a, ve_b);
 
+  if ((ve_a - wc_center).norm() < (ve_b - wc_center).norm()) ve_a.swap(ve_b);
+
   int sol = 0;
+  double theta;
   for (Vec3d ve : {ve_a, ve_b})
   {
     // find z34 from virtual forearm (v_f) and virtual upper arm (v_u)
@@ -166,64 +158,130 @@ MatRCd<4, 7> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
     elbow_pos << ve + ve_extension * z_45 + elbow_offset * z_45.cross(z_34);
 
     // calc q56 from z45 and eez
-    qSol(sol,5) = z_45.dot(x_67) < 0 ? M_PI + acos(ee_z.dot(z_45)) : acos(ee_z.dot(-z_45));
-    qSol(sol+1,5) = qSol(sol,5);
+    qSol[sol][5] = z_45.dot(x_67) < 0 ? M_PI + acos(ee_z.dot(z_45)) : acos(ee_z.dot(-z_45));
+    qSol[sol+1][5] = qSol[sol][5];
 
     // calc q45 from z34 and z56
-    qSol(sol,4) = acos(TRIG_RND(z_34.dot(z_56)));
+    qSol[sol][4] = acos(TRIG_RND(z_34.dot(z_56)));
     // find correct sign
     tmp_vec << z_34;
-    Geometry::apply(qSol(sol,4) * z_45, tmp_vec);
-    if (tmp_vec.dot(z_56) < 1 - TRIG_PREC) qSol(sol,4) *= -1;
-    qSol(sol+1,4) = qSol(sol,4);
+    Geometry::apply(qSol[sol][4] * z_45, tmp_vec);
+    if (tmp_vec.dot(z_56) < 1 - TRIG_PREC) qSol[sol][4] *= -1;
+    qSol[sol+1][4] = qSol[sol][4];
 
     // calc q12 from ve position
-    qSol(sol,1) = acos(TRIG_RND((ve[2] - shoulder_pos[2]) / ves_dist));
-    qSol(sol+1,1) = qSol(sol,1);
-    if (qSol(sol,1) < TRIG_PREC)
+    qSol[sol][1] = acos(TRIG_RND((ve[2] - shoulder_pos[2]) / ves_dist));
+    qSol[sol+1][1] = qSol[sol][1];
+    if (qSol[sol][1] < TRIG_PREC)
     {
-      double theta_ = acos((elbow_pos - ve).head(2).normalized().dot(Vec2d::UnitX()));
-      theta_ = std::copysign(theta_, Vec2d::UnitY().dot((elbow_pos - ve).head(2)));
+      theta = acos((elbow_pos - ve).head(2).normalized().dot(Vec2d::UnitX()));
+      theta = std::copysign(theta, Vec2d::UnitY().dot((elbow_pos - ve).head(2)));
 
-      qSol(sol,0) = qinit[0];
-      qSol(sol+1,0) = qSol(sol,0);
+      qSol[sol][0] = qinit[0];
+      qSol[sol+1][0] = qSol[sol][0];
 
-      qSol(sol,2) = theta_ - qSol(sol,0);
-      qSol(sol+1,2) = qSol(sol,2);
+      qSol[sol][2] = theta - qSol[sol][0];
+      qSol[sol+1][2] = qSol[sol][2];
     }
     else
     {
-      double theta_ = atan2(ve[1], ve[0]);
+      // calc q01
+      qSol[sol][0] = ve[0] > 0 ? atan2(ve[1], ve[0]) : atan2(-ve[1], -ve[0]);
+      qSol[sol+1][0] = qSol[sol][0] + M_PI;
       for (int i : {0, 1})
       {
-        // calc q01
-        qSol(sol,0) = theta_ - i * std::copysign(M_PI, theta_);
 
         // calc z12 from q01
         z_12 << Vec3d::UnitY();
-        Geometry::apply(qSol(sol,0) * Vec3d::UnitZ(), z_12);
+        Geometry::apply(qSol[sol][0] * Vec3d::UnitZ(), z_12);
 
         // calc q23 from z12
-        qSol(sol,2) = acos(TRIG_RND(z_12.dot(-z_34)));
+        qSol[sol][2] = acos(TRIG_RND(z_12.dot(-z_34)));
         tmp_vec << z_12;
-        Geometry::apply(qSol(sol,2) * z_23, tmp_vec);
+        Geometry::apply(qSol[sol][2] * z_23, tmp_vec);
         // find correct sign
-        if (tmp_vec.dot(-z_34) < 1 - TRIG_PREC) qSol(sol,2) *= -1;
+        if (tmp_vec.dot(-z_34) < 1 - TRIG_PREC) qSol[sol][2] *= -1;
 
         // find correct sign of q12 by applying to Z and compare with z23
         tmp_vec << Vec3d::UnitZ();
-        Geometry::apply(qSol(sol,1) * z_12, tmp_vec);
-        if (tmp_vec.dot(z_23) < 1 - TRIG_PREC) qSol(sol,1) *= -1;
+        Geometry::apply(qSol[sol][1] * z_12, tmp_vec);
+        if (tmp_vec.dot(z_23) < 1 - TRIG_PREC) qSol[sol][1] *= -1;
 
         sol++;
       }
     }
   }
 
+  // sort solutions
+  // if (qSol[0][0] > qSol[1][0]) qSol[0].swap(qSol[1]);
+  // if (qSol[2][0] > qSol[3][0]) qSol[2].swap(qSol[3]);
+
+  for (VecXdRef q : qSol) checkMean(q);
+
   return qSol;
 }
 
-void panda_inv(double* pose, double wrist, double* qOut)
+void PandaKinematics::eeAxesFromPose(CVecXdRef pose)
+{
+  // determine end effector's normal, open, and approach vector
+  ee_x << Vec3d::UnitX();
+  ee_y << Vec3d::UnitY();
+  ee_z << Vec3d::UnitZ();
+  Geometry::apply(pose.tail(3), ee_x);
+  Geometry::apply(pose.tail(3), ee_y);
+  Geometry::apply(pose.tail(3), ee_z);
+
+  // define wrist circle (wc): all possible wrist positions
+  wc_center << ee_pos - ee_z * getDisplacement(-1)[2];
+
+  // // use projection of (shoulder to wc_center) on ee_z to find x_67
+  // x_67 << wc_center - (shoulder_pos + ee_z * ee_z.dot(wc_center - shoulder_pos));
+
+  // // use axis perpendicular to local z and global y axis as x_67
+  // x_67 << ee_z.cross(Vec3d::UnitY());
+  // if (ee_z.z() > 0) x_67 *= -1;
+
+  // use axis between end effector's x and y axis as x_67
+  x_67 << ee_x;
+
+  std::cout << "ee x: " << ee_x.transpose() << ", ee y: " << ee_y.transpose() << std::endl;
+  std::cout << "x 67: " << x_67 << std::endl;
+
+}
+
+double PandaKinematics::getWristAngle(CVecXdRef q, Vec6dRef pose)
+{
+  if (pose.norm() == 0) pose = qToX(q);
+
+  eeAxesFromPose(pose);
+  std::cout << "x: " << ee_x.transpose() << std::endl;
+  std::cout << "z: " << ee_z.transpose() << std::endl;
+
+  // get x_67 for redundancy angel = 0
+  Vec3d x_67_0 = x_67.normalized();
+
+  // get x_67 for the actual joint config
+  x_67 = Vec3d::UnitX();
+  Vec3d rot_67 = qToX(q.head(6)).tail(3);
+  Geometry::apply(rot_67, x_67);
+  x_67.normalize();
+
+  std::cout << "x67:  " << x_67.transpose() << std::endl;
+  std::cout << "x670: " << x_67_0.transpose() << std::endl;
+
+  Vec3d y_67_0 = ee_z.cross(x_67_0).normalized();
+  std::cout << "y670: " << y_67_0.transpose() << std::endl;
+  double angle = acos(x_67.dot(x_67_0));
+
+  return acos(x_67.dot(y_67_0)) > M_PI_2 ? angle : -angle;
+}
+
+int PandaKinematics::getStatus()
+{
+  return status;
+}
+
+int panda_ik(double* pose, double wrist, double* qOut, int sol)
 {
   static PandaKinematics panda;
   // Franka Hand:
@@ -231,7 +289,23 @@ void panda_inv(double* pose, double wrist, double* qOut)
   // std::cout << "[ ";
   // for (int i : {0, 1, 2, 3, 4, 5, 6}) std::cout << qOut[i] << " ";
   // std::cout << "]" << std::endl;
+
   CVec6dMap x(pose);
   VecXdMap qOutMap(qOut, 7);
-  qOutMap = panda.xToQ(x, wrist, qOutMap);
+  if (sol < 0) qOutMap = panda.xToQ(x, wrist, qOutMap);
+  else qOutMap = panda.xToAllQ(x, wrist)[sol];
+
+  return panda.getStatus();
+}
+
+int panda_fk(double* q, double* pose, int dof)
+{
+  static PandaKinematics panda;
+
+  CVecXdMap qVec(q, dof);
+  VecXdMap poseVec(pose, 7);
+
+  poseVec[6] = panda.getWristAngle(qVec, poseVec.head(6));
+
+  return 0;
 }
