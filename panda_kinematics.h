@@ -20,6 +20,11 @@ class PandaKinematics : public Kinematics
     static const int STATUS_OK;
     static const int STATUS_TOO_FAR;
 
+    static int _debug_level;
+    static const int DEBUG_LOUD;
+    static const int DEBUG_SILENT;
+    static const int DEBUG_MUTE;
+
   private:
     // retrieve ee axes and some other stuff needed for the wrist calculations
     void eeAxesFromPose(CVecXdRef pose);
@@ -55,6 +60,7 @@ class PandaKinematics : public Kinematics
     Vec3d x_67;
     Vec3d wrist_pos;
     Vec3d tmp_vec;
+    Vec3d help_vec;
     Vec3d wr_sh;
     Vec3d ve_a;
     Vec3d ve_b;
@@ -73,4 +79,6 @@ extern "C"
   int panda_ik(double* pose, double wrist, double* qOut, int sol = -1);
 
   int panda_fk(double* q, double* pose, int dof = 7);
+
+  void panda_debug(int level);
 }
