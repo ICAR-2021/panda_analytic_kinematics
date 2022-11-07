@@ -21,7 +21,9 @@ class PandaKinematics:
   def setEndEffector(self, ee):
     self.end_effector = ee
 
-  def ik(self, pose, wrist, qInOut, resultList=[0], solution=0):
+  def ik(self, pose, qInOut, optionals = [0, 0], results=[0]):
+    wrist = optionals[0]
+    solution = 0 if len(optionals) < 2 else optionals[1]
     angle = numpy.max(numpy.abs(pose[3:6]))
     norm = numpy.linalg.norm(pose[3:6])
     normPose = numpy.copy(pose)
@@ -31,7 +33,7 @@ class PandaKinematics:
     normPose = (c_double * p_size)(*normPose)
     q_size = len(qInOut)
     qInOut = (c_double * q_size)(*qInOut)
-    resultList[0] = self.lib_panda.panda_ik(normPose, wrist, qInOut, solution)
+    results[0] = self.lib_panda.panda_ik(normPose, wrist, qInOut, solution)
     qInOut = numpy.array(qInOut[:])
     return qInOut
 
