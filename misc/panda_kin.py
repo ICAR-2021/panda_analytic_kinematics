@@ -54,4 +54,4 @@ if __name__ == "__main__":
   args = sys.argv[1:6]
   x[:len(args)] = [a for a in args]
   kin = PandaKinematics()
-  print("Goal joint config:", kin.ik(x, angle, qRobot), sep="\n  ");
+  print("Goal joint config:", kin.ik(x, qRobot, [angle]), sep="\n  ");

@@ -196,15 +196,16 @@ std::vector<VecXd> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngl
 
       qSol[sol][2] = theta - qSol[sol][0];
       qSol[sol+1][2] = qSol[sol][2];
+
+      sol += 2;
     }
     else
     {
       // calc q01
-      qSol[sol][0] = ve[0] > 0 ? atan2(ve[1], ve[0]) : atan2(-ve[1], -ve[0]);
+      qSol[sol][0] = atan2(-ve[1], -ve[0]);
       qSol[sol+1][0] = qSol[sol][0] + M_PI;
       for (int i : {0, 1})
       {
-
         // calc z12 from q01
         z_12 << Vec3d::UnitY();
         help_vec = qSol[sol][0] * Vec3d::UnitZ();
@@ -218,11 +219,15 @@ std::vector<VecXd> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngl
         // find correct sign
         if (tmp_vec.dot(-z_34) < 1 - TRIG_PREC) qSol[sol][2] *= -1;
 
-        // find correct sign of q12 by applying to Z and compare with z23
-        tmp_vec << Vec3d::UnitZ();
+        // find correct sign by checking distance to ve when using the calculated q12
+        tmp_vec << 0, 0, ves_dist;
         help_vec = qSol[sol][1] * z_12;
         Geometry::apply(help_vec, tmp_vec);
-        if (tmp_vec.dot(z_23) < 1 - TRIG_PREC) qSol[sol][1] *= -1;
+        double dist = (ve - (shoulder_pos + tmp_vec)).norm();
+        tmp_vec << 0, 0, ves_dist;
+        help_vec = -qSol[sol][1] * z_12;
+        Geometry::apply(help_vec, tmp_vec);
+        if (dist > (ve - (shoulder_pos + tmp_vec)).norm()) qSol[sol][1] *= -1;
 
         sol++;
       }
@@ -310,8 +315,9 @@ int panda_ik(double* pose, double wrist, double* qOut, int sol)
 
   CVec6dMap x(pose);
   VecXdMap qOutMap(qOut, 7);
-  if (sol < 0) qOutMap = panda.xToQ(x, wrist, qOutMap);
-  else qOutMap = panda.xToAllQ(x, wrist)[sol];
+
+  if (sol < 0 || sol > 3) qOutMap = panda.xToQ(x, wrist, qOutMap);
+  else qOutMap = panda.xToAllQ(x, wrist, qOutMap)[sol];
 
   return panda.getStatus();
 }
