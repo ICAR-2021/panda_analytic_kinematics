@@ -7,6 +7,13 @@
 
 namespace Geometry
 {
+  /**
+   * @brief Project a \c vector or point onto a line or \c direction vector.
+   *
+   * @param direction the projection direction/line (through origin)
+   * @param vector the vector/point that shall be projected (w.r.t. origin)
+   * @return \c Vec3d representing the projected vector/point
+   */
   static Vec3d project(Vec3d direction, CVec3dRef vector)
   {
     direction.normalize();
@@ -132,5 +139,13 @@ namespace Geometry
     }
 
     if (transform.size() == 6) vec.head(3) += transform.head(3);
+  }
+
+  static double getAngularDifference(const double& alpha, const double& beta)
+  {
+    double lo = std::min(alpha, beta);
+    double hi = std::max(alpha, beta);
+
+    return std::min(hi - lo, abs(hi - (lo + 2 * M_PI)));
   }
 }

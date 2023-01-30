@@ -17,6 +17,8 @@ const int PandaKinematics::DEBUG_MUTE = INT_MAX;
 
 int PandaKinematics::_debug_level = PandaKinematics::DEBUG_MUTE;
 
+std::unordered_map<std::string, PandaKinematics> PandaKinematics::_pk_map = {};
+
 PandaKinematics::PandaKinematics(Vec6d endEffector)
 : shoulder_pos(.0, .0, .333),
   wc_radius(.088),
@@ -38,11 +40,6 @@ PandaKinematics::PandaKinematics(Vec6d endEffector)
   addDisplacement(-.0825,  .124, .0  , -M_PI_2, .0,      .0);
   addDisplacement( .0   ,  .0  , .26 ,  M_PI_2, .0,      .0);
   addDisplacement( .088 , -.107, .0  ,  M_PI_2, .0,      .0);
-
-  Vec6d l7;
-  // l7 << .0, .0, .107, .0, .0, -M_PI_4;
-  l7 << .0, .0, .0, .0, .0, 0;
-  Geometry::apply(l7, endEffector);
   addDisplacement(endEffector[0], endEffector[1], endEffector[2],
                   endEffector[3], endEffector[4], endEffector[5]);
 
@@ -59,19 +56,45 @@ VecXd PandaKinematics::xToQ(CVec6dRef pose, const double& wrAngle, CVecXdRef qin
 {
   std::vector<VecXd> allQ = xToAllQ(pose, wrAngle, qinit);
 
-  double diff, minSol = (allQ[0] - qinit).norm();
-  int minSolIndex = 0;
-  for (int i = 1; i < allQ.size(); i++)
+  double diff, maxDiff, minMax = 2 * M_PI;
+  int minMaxSol = 0;
+  for (int i = 0; i < allQ.size(); i++)
   {
-    diff = (allQ[i] - qinit).norm();
-    if (diff < minSol)
+    maxDiff = 0;
+    for (int j = 0; j < qinit.size(); j++)
     {
-      minSol = diff;
-      minSolIndex = i;
+      diff = Geometry::getAngularDifference(allQ[i][j], qinit[j]);
+      if (diff > maxDiff) maxDiff = diff;
+    }
+    if (maxDiff < minMax)
+    {
+      minMax = maxDiff;
+      minMaxSol = i;
     }
   }
 
-  return allQ[minSolIndex];
+  return allQ[minMaxSol];
+}
+
+std::vector<VecXd> PandaKinematics::xToAllQElbow(CVec6dRef pose, const double& elbow,
+                                                 CVecRdRef<7> qinit)
+{
+  status = STATUS_OK;
+
+  std::vector<VecXd> qSol;
+  for (int i = 0; i < 4; i++) qSol.push_back(Vec7d::Zero());
+
+  eeAxesFromPose(pose);
+
+  wc_sh = shoulder_pos - wc_center;
+  wrist_pos = wc_sh - Geometry::project(ee_z, wc_sh);
+  wrist_pos = wrist_pos.normalized() * wc_radius;
+  PK_OUT << "minimum circle projection: " << wrist_pos.transpose() << std::endl;
+  wrist_pos += wc_center;
+
+  PK_OUT << "minimum wrist:  " << wrist_pos.transpose() << std::endl;
+
+  return qSol;
 }
 
 std::vector<VecXd> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngle,
@@ -123,7 +146,7 @@ std::vector<VecXd> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngl
 
   // find angle spanned by forearm and upper arm
   double cos_sh_el_wr((pow(len_ua, 2) + pow(len_fa, 2) - pow(wr_sh.norm(), 2))
-                    / (2 * len_ua * len_fa));
+                      / (2 * len_ua * len_fa));
   double sh_el_wr(acos(cos_sh_el_wr));
   qSol[0][3] = -M_PI + sh_el_wr - fa_offset - ua_offset;
 
@@ -234,10 +257,6 @@ std::vector<VecXd> PandaKinematics::xToAllQ(CVec6dRef pose, const double& wrAngl
     }
   }
 
-  // sort solutions
-  // if (qSol[0][0] > qSol[1][0]) qSol[0].swap(qSol[1]);
-  // if (qSol[2][0] > qSol[3][0]) qSol[2].swap(qSol[3]);
-
   for (VecXdRef q : qSol) checkMean(q);
 
   return qSol;
@@ -256,15 +275,16 @@ void PandaKinematics::eeAxesFromPose(CVecXdRef pose)
   // read end effector position
   ee_pos << pose.head(3);
 
-  Vec6d disp = getDisplacement(-2);
-  disp[0] = 0;
-  Geometry::apply(getDisplacement(-1), disp);
-  disp *= -1;
-  Geometry::apply(disp.tail(3), disp.head(3));
-  Geometry::apply(pose.tail(3), disp.head(3));
+  Vec6d dTail = getDisplacement(-1);
+  Vec6d d2ndLast = getDisplacement(-2);
+  d2ndLast[0] = 0;
+  Geometry::apply(d2ndLast, dTail);
+  dTail *= -1;
+  Geometry::apply(dTail.tail(3), dTail.head(3));
+  Geometry::apply(pose.tail(3), dTail.head(3));
 
   // define wrist circle (wc): all possible wrist positions
-  wc_center << ee_pos + disp.head(3);
+  wc_center << ee_pos + dTail.head(3);
 
   // // use projection of (shoulder to wc_center) on ee_z to find x_67
   // x_67 << wc_center - (shoulder_pos + ee_z * ee_z.dot(wc_center - shoulder_pos));
@@ -304,9 +324,28 @@ int PandaKinematics::getStatus()
   return status;
 }
 
-int panda_ik(double* pose, double wrist, double* qOut, int sol)
+PandaKinematics& PandaKinematics::get(std::string name)
 {
-  static PandaKinematics panda;
+  if (_pk_map.find(name) == _pk_map.end()) PandaKinematics::add(name, PandaKinematics());
+  return _pk_map[name];
+}
+
+void PandaKinematics::add(std::string name, PandaKinematics pk)
+{
+  _pk_map.insert(std::pair<std::string, PandaKinematics>(name, pk));
+}
+
+void panda_create(char* name, double* ee)
+{
+  CVec6dMap endEffector(ee);
+  PK_OUT << "End effector: " << endEffector.transpose() << std::endl;
+  PandaKinematics::add(std::string(name), PandaKinematics(endEffector));
+}
+
+int panda_ik(char* name, double* pose, double wrist, double* qOut, int sol)
+{
+  PandaKinematics panda = PandaKinematics::get(std::string(name));
+
   // // Franka Hand:
   // panda.addDisplacement( .0   ,  .0  , .22 ,      .0, .0, -M_PI_4);
   // std::cout << "[ ";
@@ -316,15 +355,17 @@ int panda_ik(double* pose, double wrist, double* qOut, int sol)
   CVec6dMap x(pose);
   VecXdMap qOutMap(qOut, 7);
 
+  panda.xToAllQElbow(x);
+
   if (sol < 0 || sol > 3) qOutMap = panda.xToQ(x, wrist, qOutMap);
   else qOutMap = panda.xToAllQ(x, wrist, qOutMap)[sol];
 
   return panda.getStatus();
 }
 
-int panda_fk(double* q, double* pose, int dof)
+int panda_fk(char* name, double* q, double* pose, int dof)
 {
-  static PandaKinematics panda;
+  PandaKinematics panda = PandaKinematics::get();
 
   CVecXdMap qVec(q, dof);
   VecXdMap poseVec(pose, 7);

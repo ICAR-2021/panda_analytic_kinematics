@@ -7,11 +7,16 @@
 class PandaKinematics : public Kinematics
 {
   public:
+    static PandaKinematics& get(std::string name = "");
+    static void add(std::string name, PandaKinematics pk);
+
     PandaKinematics(Vec6d endEffector = Vec6d::Zero());
 
     VecXd xToQ(CVec6dRef pose, const double& wrAngle = 0, CVecXdRef qinit = Vec7d::Zero());
     std::vector<VecXd> xToAllQ(CVec6dRef pose, const double& wrAngle = .0,
                                CVecRdRef<7> qinit = Vec7d::Zero());
+    std::vector<VecXd> xToAllQElbow(CVec6dRef pose, const double& elbow = .0,
+                                    CVecRdRef<7> qinit = Vec7d::Zero());
 
     double getWristAngle(CVecXdRef q, Vec6dRef pose);
 
@@ -26,6 +31,9 @@ class PandaKinematics : public Kinematics
     static const int DEBUG_MUTE;
 
   private:
+    // map for different end effectors
+    static std::unordered_map<std::string, PandaKinematics> _pk_map;
+
     // retrieve ee axes and some other stuff needed for the wrist calculations
     void eeAxesFromPose(CVecXdRef pose);
 
@@ -51,6 +59,8 @@ class PandaKinematics : public Kinematics
     // angle offset between forearm and virtual forearm
     const double fa_offset;
 
+    Vec3d tmp_vec;
+    Vec3d help_vec;
     Vec3d ee_inv;
     Vec3d ee_pos;
     Vec3d ee_x;
@@ -59,8 +69,7 @@ class PandaKinematics : public Kinematics
     Vec3d wc_center;
     Vec3d x_67;
     Vec3d wrist_pos;
-    Vec3d tmp_vec;
-    Vec3d help_vec;
+    Vec3d wc_sh;
     Vec3d wr_sh;
     Vec3d ve_a;
     Vec3d ve_b;
@@ -76,9 +85,11 @@ class PandaKinematics : public Kinematics
 
 extern "C"
 {
-  int panda_ik(double* pose, double wrist, double* qOut, int sol = -1);
+  void panda_create(char* name, double* ee);
 
-  int panda_fk(double* q, double* pose, int dof = 7);
+  int panda_ik(char* name, double* pose, double wrist, double* qOut, int sol = -1);
+
+  int panda_fk(char* name, double* q, double* pose, int dof = 7);
 
   void panda_debug(int level);
 }
